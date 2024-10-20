@@ -23,7 +23,7 @@ Example usage:
 ```
 
 ### Running the API
-API can be run using the script `scripts/run_api.sh`. It supports the following options:
+API can be run using the script `scripts/serve.sh`. It supports the following options:
 - `--model`: Model to use. Pretrained models are available for `resnet18` and `efficientnet_b0`.
 
 Example usage:
