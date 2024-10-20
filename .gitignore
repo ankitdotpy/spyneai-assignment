@@ -163,3 +163,5 @@ cython_debug/
 
 *.pth
 data/
+*.zip
+!project_1/data/
