@@ -20,7 +20,7 @@ python3 project_1/main.py
 The results are by default stores in `project_1/data/output` directory. All the requires dataset and image paths can be changed at the top of `main.py` file.
 
 ## Project 2
-To run the code for project 2, use the following commands (see available options in `scripts/train.sh` and `scripts/serve.sh`):
+To run the code for project 2, use the following commands (see available options in [project_2/README.md](./project_2/README.md)):
 
 ### For training the model
 ```bash

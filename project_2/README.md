@@ -28,5 +28,5 @@ API can be run using the script `scripts/run_api.sh`. It supports the following 
 
 Example usage:
 ```bash
-./scripts/run_api.sh --model efficientnet_b0
+./scripts/serve.sh --model efficientnet_b0
 ```
