@@ -50,6 +50,15 @@ case $key in
 esac
 done
 
+#if data directory does not exist or is empty, download the data from https://drive.google.com/file/d/15F2IyaRAa4nGydRaf8Ny9NfoqCwwx0Pr/view?usp=sharing
+if [ ! -d "$DATA_DIR" ] || [ -z "$(ls -A $DATA_DIR)" ]; then
+    echo "Data directory does not exist or is empty. Downloading data..."
+    gdown https://drive.google.com/uc?id=15F2IyaRAa4nGydRaf8Ny9NfoqCwwx0Pr
+    unzip archive.zip
+    rm archive.zip
+    mv dataset $DATA_DIR
+fi
+
 # Construct the command
 CMD="python src/train.py --model $MODEL --epochs $EPOCHS --batch_size $BATCH_SIZE --learning_rate $LEARNING_RATE --data_dir $DATA_DIR"
 
