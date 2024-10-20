@@ -128,7 +128,7 @@ def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rat
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train car angle classifier")
-    parser.add_argument("--data_dir", type=str, default="dataset/", help="Path to the dataset")
+    parser.add_argument("--data_dir", type=str, default="data/", help="Path to the dataset")
     parser.add_argument("--model", type=str, default="resnet50", 
                         choices=['resnet50', 'resnet18', 'efficientnet_b0', 'efficientnet_v2_s', 'vit_b_16', 'regnet_y_32gf'], 
                         help="Model architecture to use")

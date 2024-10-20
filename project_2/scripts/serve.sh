@@ -31,6 +31,9 @@ if [ ! -d "models/$MODEL" ] || [ -z "$(ls -A models/$MODEL)" ]; then
     elif [ "$MODEL" == "efficientnet_b0" ]; then
         gdown https://drive.google.com/uc?id=15F2IyaRAa4nGydRaf8Ny9NfoqCwwx0Pr
         mv best_model_efficientnet_b0.pth models/$MODEL/
+    else
+        echo "Pretrained model $MODEL is not available. Please train the model first."
+        exit 1
     fi
 fi
 

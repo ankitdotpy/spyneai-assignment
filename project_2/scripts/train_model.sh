@@ -5,7 +5,7 @@ MODEL="efficientnet_b0"
 EPOCHS=10
 BATCH_SIZE=32
 LEARNING_RATE=0.001
-DATA_DIR="dataset/"
+DATA_DIR="data/"
 FREEZE_BASE=false
 
 # Parse command line arguments
