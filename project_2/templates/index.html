@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Classification</title>
+    <style>
+        #imagePreview {
+            max-width: 300px;
+            max-height: 300px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Classification</h1>
+    <form id="uploadForm">
+        <input type="file" name="file" accept="image/*" required id="imageInput">
+        <button type="submit">Classify Image</button>
+    </form>
+    <div id="imageContainer" style="display: none;">
+        <h3>Uploaded Image:</h3>
+        <img id="imagePreview" src="" alt="Uploaded image preview">
+    </div>
+    <div id="result"></div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const imageContainer = document.getElementById('imageContainer');
+        const resultDiv = document.getElementById('result');
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    imageContainer.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<p>Prediction: ${data.class_name} - ${data.confidence*100}%</p>`;
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = '<p>An error occurred. Please try again.</p>';
+            }
+        });
+    </script>
+</body>
+</html>
