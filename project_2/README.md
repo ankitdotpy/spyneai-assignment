@@ -30,3 +30,4 @@ Example usage:
 ```bash
 ./scripts/serve.sh --model efficientnet_b0
 ```
+Then the API will be available at `http://localhost:8000`.
