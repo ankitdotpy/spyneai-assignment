@@ -2,6 +2,7 @@ import os
 import argparse
 
 import torch
+import onnx
 import torch.nn as nn
 import torch.optim as optim
 from data_preprocessing import get_data_loaders, analyze_dataset
@@ -10,6 +11,13 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import numpy as np
+from tqdm import tqdm
+
+
+def export_to_onnx(model, model_path, device):
+    dummy_input = torch.randn(1, 3, 224, 224).to(device)
+    torch.onnx.export(model, dummy_input, model_path, verbose=True, input_names=['input'], output_names=['output'])
+    print(f"Model exported to {model_path}")
 
 def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rate=0.001, freeze_base=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,15 +42,14 @@ def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rat
     val_accuracies = []
     best_val_loss = float('inf')
 
-    # Create models directory in project root if it doesn't exist
     models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'models/{model_name}')
     os.makedirs(models_dir, exist_ok=True)
 
     for epoch in range(num_epochs):
         model.train()
         train_loss = 0.0
-        for inputs, labels in train_loader:
-            # print(inputs.shape, labels.shape)
+        train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]", leave=False)
+        for inputs, labels in train_pbar:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -50,6 +57,7 @@ def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rat
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
+            train_pbar.set_postfix({'loss': f"{loss.item():.4f}"})
         
         train_loss /= len(train_loader)
         train_losses.append(train_loss)
@@ -60,9 +68,9 @@ def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rat
         total = 0
         all_preds = []
         all_labels = []
+        val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Val]", leave=False)
         with torch.no_grad():
-            for inputs, labels in val_loader:
-                print(inputs.shape, labels.shape)
+            for inputs, labels in val_pbar:
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -72,6 +80,7 @@ def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rat
                 correct += predicted.eq(labels).sum().item()
                 all_preds.extend(predicted.cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
+                val_pbar.set_postfix({'loss': f"{loss.item():.4f}"})
         
         val_loss /= len(val_loader)
         val_losses.append(val_loss)
@@ -122,6 +131,13 @@ def train_model(data_dir, model_name, num_epochs=50, batch_size=32, learning_rat
     final_model_path = os.path.join(models_dir, f'final_model_{model_name}.pth')
     torch.save(model.state_dict(), final_model_path)
     print(f"Saved final model to {final_model_path}")
+
+    onnx_model_path = os.path.join(models_dir, f'final_model_{model_name}.onnx')
+    export_to_onnx(model, onnx_model_path, device)
+
+    onnx_model = onnx.load(onnx_model_path)
+    onnx.checker.check_model(onnx_model)
+    print(f"ONNX model {onnx_model_path} is valid")
 
     return class_to_idx
 

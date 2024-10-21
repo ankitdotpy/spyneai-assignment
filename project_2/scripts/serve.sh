@@ -26,11 +26,11 @@ if [ ! -d "models/$MODEL" ] || [ -z "$(ls -A models/$MODEL)" ]; then
     echo "Models directory does not exist or is empty. Downloading models..."
     mkdir -p models/$MODEL
     if [ "$MODEL" == "resnet18" ]; then
-        gdown https://drive.google.com/uc?id=1AgSKsDDh9qnYZKjPc6zxGN1RfUfpI-PB
-        mv best_model_resnet18.pth models/$MODEL/
+        gdown https://drive.google.com/file/d/1RYUm5eAbLlpXsKRAsaz2ZxLCD4UyinXQ
+        mv final_model_resnet18.onnx models/$MODEL/
     elif [ "$MODEL" == "efficientnet_b0" ]; then
-        gdown https://drive.google.com/file/d/1mpEiJt6CU2ZbRxe4yG7YM8bz_jz4bj4C
-        mv best_model_efficientnet_b0.pth models/$MODEL/
+        gdown https://drive.google.com/file/d/1V85vUrItWk9FLr2UkTnVXFYcFqW1Q22F
+        mv final_model_efficientnet_b0.onnx models/$MODEL/
     else
         echo "Pretrained model $MODEL is not available. Please train the model first."
         exit 1
