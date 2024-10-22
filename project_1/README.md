@@ -11,6 +11,3 @@ python3 main.py
 ```
 
 The results are by default stores in `data/output` directory. All the requires dataset and image paths can be changed at the top of `main.py` file.
-
-## Additional Notes
-The code does not function correctly. Noise removal from mask, and car extraction works. Need to take a fresh approach to align cars and shadows.
