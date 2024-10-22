@@ -3,40 +3,72 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from utils import detect_background
 
-from utils import (
-    load_image_and_masks,
-    detect_background,
-    clean_mask,
-    resize_keep_aspect_ratio,
-    overlay_transparent
-)
+DATA_DIR = Path("./data")
+IMAGES_DIR = DATA_DIR / "images"
+CAR_MASKS_DIR = DATA_DIR / "car_masks"
+SHADOW_MASKS_DIR = DATA_DIR / "shadow_masks"
 
-DATA_ROOT = Path('./data')
-IMAGES_ROOT = DATA_ROOT / 'images'
-MASKS_DIR = DATA_ROOT / 'car_masks'
-SHADOW_DIR = DATA_ROOT / 'shadow_masks'
-OUTPUT_DIR = DATA_ROOT / 'output'
-
-if not OUTPUT_DIR.exists():
-    OUTPUT_DIR.mkdir()
-
-def extract_car_image(image, mask):
+def remove_background(car_image, car_mask):
     """
-    Extracts the car from the image using the provided mask.
+    Remove the background from the car image using the car mask.
 
-    Args:
-        image (numpy.ndarray): The input image containing the car.
-        mask (numpy.ndarray): The binary mask of the car.
-
-    Returns:
-        numpy.ndarray: The extracted car image with an alpha channel.
+    :param car_image: Car image
+    :param car_mask: Car mask
+    :return: Car image without background
     """
-    mask = clean_mask(mask)
-    extracted_car = cv2.bitwise_and(image, image, mask=mask)
-    car_mask_reshaped = np.expand_dims(mask, axis=-1)
-    extracted_car = np.concatenate((image, car_mask_reshaped), axis=-1)
-    return extracted_car
+    _, binary_mask = cv2.threshold(car_mask, 0.498, 1, cv2.THRESH_BINARY)
+    kernel = np.ones((7, 7), np.uint8) # 7x7 seems to work well
+    binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel)
+    binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+    binary_mask = cv2.medianBlur(binary_mask, ksize=5)
+    return cv2.bitwise_and(car_image, car_image, mask=binary_mask)
+
+def align_shadow(car_mask, shadow_mask):
+    """
+    Align the shadow mask to the car mask.
+
+    :param car_mask: Car mask
+    :param shadow_mask: Shadow mask
+    :return: Aligned shadow mask
+    """
+    car_contours, _ = cv2.findContours(car_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    largest_contour = max(car_contours, key=cv2.contourArea) # assuming largest contour is the car
+    x, y, w, h = cv2.boundingRect(largest_contour)
+
+    # resize shadow mask to match the width of the car
+    shadow_mask = cv2.resize(shadow_mask, (w, shadow_mask.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+    # create a blank mask the same size as the car mask
+    aligned_shadow = np.zeros_like(car_mask)
+
+    # calculate the vertical position to place the shadow (at the bottom of the car)
+    shadow_y = y + h - shadow_mask.shape[0]
+
+    # place the resized shadow in the correct position
+    aligned_shadow[shadow_y:shadow_y+shadow_mask.shape[0], x:x+w] = shadow_mask
+    return aligned_shadow
+
+def center_car(car_image, car_mask, background):
+    # Find the contour of the car
+    car_contours, _ = cv2.findContours(car_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    largest_contour = max(car_contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+
+    # Calculate the center position in the background
+    bg_h, bg_w = background.shape[:2]
+    center_x = (bg_w - w) // 2
+    center_y = bg_h - h - 20
+
+    # Create a translation matrix
+    M = np.float32([[1, 0, center_x - x], [0, 1, center_y - y]])
+
+    # Apply the translation to the car image and mask
+    centered_car = cv2.warpAffine(car_image, M, (bg_w, bg_h))
+    centered_mask = cv2.warpAffine(car_mask, M, (bg_w, bg_h))
+
+    return centered_car, centered_mask
 
 def create_background(floor, wall):
     """
@@ -55,49 +87,74 @@ def create_background(floor, wall):
                             floor[start_row_floor:end_row_floor, :]))
     return background
 
-def compose_image(image_path):
+def compose_image(car_image, car_mask, shadow_mask, background, shadow_strength=0.9):
+    # Remove background from car image
+    car_image_without_bg = remove_background(car_image, car_mask)
+
+    # Center the car in the background
+    centered_car, centered_mask = align_car_with_floor(car_image_without_bg, car_mask, background)
+
+    # Align and center the shadow
+    aligned_shadow = align_shadow(centered_mask, shadow_mask)
+    centered_shadow, _ = align_car_with_floor(aligned_shadow, centered_mask, background)
+
+    # Combine car with background
+    result = background.copy()
+    car_area = (centered_car.sum(axis=2) != 0)
+    result[car_area] = centered_car[car_area]
+
+    # Apply shadow
+    shadow_area = (centered_shadow > 0)
+    result[shadow_area] = result[shadow_area] * (1 - shadow_strength * centered_shadow[shadow_area, np.newaxis] / 255)
+
+    return result
+
+def resize_keep_aspect_ratio(image, size):
     """
-    Composes a new image by combining a car image with a background.
+    Resizes an image while keeping the aspect ratio.
 
     Args:
-        image_path (Path): The path to the input car image.
+        image (numpy.ndarray): The input image.
+        size (tuple): The target size (width, height).
 
-    This function loads the car image and its masks, creates a background,
-    extracts the car, and overlays it on the background. The result is saved
-    as a new image.
+    Returns:
+        numpy.ndarray: The resized image.
     """
-    car_image, car_mask, shadow_mask = load_image_and_masks(image_path)
-    floor = cv2.imread(DATA_ROOT / 'floor.png', cv2.IMREAD_UNCHANGED)
-    wall = cv2.imread(DATA_ROOT / 'wall.png', cv2.IMREAD_UNCHANGED)
+    h, w = image.shape[:2]
+    ratio = min(size[0] / w, size[1] / h)
+    return cv2.resize(image, (int(w * ratio), int(h * ratio)), interpolation=cv2.INTER_AREA)
 
-    # combine floor and wall to create background
+def align_car_with_floor(car_image, car_mask, background):
+    car_contours, _ = cv2.findContours(car_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    largest_contour = max(car_contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+
+    bg_h, bg_w = background.shape[:2]
+    
+    # Assuming the floor starts at 2/5 of the background height
+    floor_start = int(bg_h * 0.95)
+    
+    # Place the car at the bottom of the background
+    target_x = (bg_w - w) // 2
+    target_y = (floor_start - h) # Place the bottom of the car at the floor start
+    M = np.float32([[1, 0, target_x - x], [0, 1, target_y - y]])
+    aligned_car = cv2.warpAffine(car_image, M, (bg_w, bg_h))
+    aligned_mask = cv2.warpAffine(car_mask, M, (bg_w, bg_h))
+    return aligned_car, aligned_mask
+
+def main(image_id):
+    car_image = cv2.imread(str(IMAGES_DIR / f"{image_id}.jpeg"))
+    car_mask = cv2.imread(str(CAR_MASKS_DIR / f"{image_id}.png"), cv2.IMREAD_GRAYSCALE)
+    shadow_mask = cv2.imread(str(SHADOW_MASKS_DIR / f"{image_id}.png"), cv2.IMREAD_GRAYSCALE)
+    floor = cv2.imread(str(DATA_DIR / "floor.png"))
+    wall = cv2.imread(str(DATA_DIR / "wall.png"))
+
     background = create_background(floor, wall)
     background = resize_keep_aspect_ratio(background, (1920, 1080))
 
-    # extract the car from the image
-    extracted_car = extract_car_image(car_image, car_mask)
+    result = compose_image(car_image, car_mask, shadow_mask, background)
+    cv2.imwrite(f"data/output/{image_id}.png", result)
 
-    st_row, end_row = detect_background(extracted_car, axis=1)
-    st_col, end_col = detect_background(extracted_car, axis=0)
-    extracted_car = extracted_car[st_row:end_row+10, st_col:end_col, :]
-    if extracted_car.shape[0] < 700 and extracted_car.shape[1] < 1200:
-        print(image_path, extracted_car.shape)
-        extracted_car = resize_keep_aspect_ratio(extracted_car, (1200, 700))
-    
-    y_offset = int(background.shape[0] * 0.95)
-    x_offset = (background.shape[1] - extracted_car.shape[1]) // 2
-
-    # overlay the extracted car on the background
-    result = background.copy()
-    roi = result[y_offset-extracted_car.shape[0]:y_offset, x_offset:x_offset+extracted_car.shape[1], :]
-    roi = overlay_transparent(roi, extracted_car)
-    result[y_offset-extracted_car.shape[0]:y_offset, x_offset:x_offset+extracted_car.shape[1], :3] = roi
-
-    # add shadow to the bottom of the car
-
-    # Save the result
-    cv2.imwrite(OUTPUT_DIR / f'{image_path.stem}.png', result)
-
-if __name__ == '__main__':
-    for image_path in IMAGES_ROOT.glob('*.jpeg'):
-        compose_image(image_path)
+if __name__ == "__main__":
+    for image_id in range(1,7):
+        main(image_id)
