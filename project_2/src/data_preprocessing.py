@@ -31,7 +31,7 @@ def get_data_loaders(data_dir, batch_size=32, train_ratio=0.8):
 
     # Apply transforms when creating the datasets
     train_dataset = datasets.ImageFolder(data_dir, transform=train_transforms)
-    val_dataset = datasets.ImageFolder(data_dir, transform=val_transform)
+    # val_dataset = datasets.ImageFolder(data_dir, transform=val_transform)
 
     # Calculate sizes
     total_size = len(train_dataset)
@@ -39,8 +39,8 @@ def get_data_loaders(data_dir, batch_size=32, train_ratio=0.8):
     val_size = total_size - train_size
 
     # Use random_split on the datasets
-    train_dataset, _ = random_split(train_dataset, [train_size, val_size])
-    _, val_dataset = random_split(val_dataset, [train_size, val_size])
+    train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+    # _, val_dataset = random_split(val_dataset, [train_size, val_size])
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=True)
